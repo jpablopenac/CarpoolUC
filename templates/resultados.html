@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de Optimización</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .results-section {
+            padding: 30px;
+        }
+
+        .model-results {
+            margin-bottom: 40px;
+            background: #f8f9ff;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .model-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+
+        .heatmap-container {
+            padding: 30px;
+        }
+
+        .heatmap-title {
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .heatmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .heatmap-table th {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 15px 10px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .heatmap-table td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            position: relative;
+            min-width: 60px;
+        }
+
+        .time-cell {
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .heat-cell {
+            font-weight: bold;
+            color: white;
+            position: relative;
+        }
+
+        .conductores-section {
+            padding: 30px;
+        }
+
+        .agenda-title {
+            margin: 12px 0 10px;
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #334;
+        }
+
+        .agenda-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            margin-bottom: 18px;
+        }
+
+        .agenda-table th {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 11px 8px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .agenda-table td {
+            border: 1px solid #eef2fb;
+            vertical-align: top;
+            padding: 10px;
+            min-width: 180px;
+        }
+
+        .agenda-slot {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 110px;
+        }
+
+        .agenda-meta {
+            font-size: 0.82em;
+            color: #5f6780;
+        }
+
+        .rol-box {
+            background: #f8f9ff;
+            border: 1px solid #e6ebfc;
+            border-radius: 8px;
+            padding: 7px;
+        }
+
+        .rol-box.chofer-activo {
+            background: #eaf8ef;
+            border-color: #8fd2a8;
+        }
+
+        .rol-box.pasajero-ok {
+            background: #eaf3ff;
+            border-color: #9dc2f6;
+        }
+
+        .rol-box.pasajero-sin-chofer {
+            background: #ffeaea;
+            border-color: #ee9b9b;
+        }
+
+        .rol-label {
+            display: block;
+            font-size: 0.78em;
+            font-weight: 700;
+            color: #445;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .rol-value {
+            font-size: 0.86em;
+            color: #2e3650;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .rol-value.drop-zone {
+            min-height: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            border-radius: 6px;
+            padding: 2px;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+
+        .rol-value.drop-zone.drag-over {
+            background: rgba(79, 172, 254, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(79, 172, 254, 0.55);
+        }
+
+        .persona-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 1px solid #d6deee;
+            font-size: 0.83em;
+            color: #253152;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .persona-chip:active {
+            cursor: grabbing;
+        }
+
+        .persona-chip.dragging {
+            opacity: 0.4;
+        }
+
+        .placeholder-chip {
+            font-size: 0.85em;
+            color: #7a869d;
+        }
+
+        .visual-mode-note {
+            margin: 0 0 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #f0f6ff;
+            border: 1px solid #c8defd;
+            color: #2f4d7e;
+            font-size: 0.9em;
+        }
+
+        .visual-note-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mini-btn {
+            border: 1px solid #93b9f1;
+            background: #ffffff;
+            color: #2f4d7e;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.82em;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .mini-btn:hover {
+            background: #eef5ff;
+        }
+
+        .day-title {
+            margin: 25px 0 12px;
+            font-size: 1.25em;
+            color: #445;
+            font-weight: 700;
+        }
+
+        .asignacion-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+
+        .asignacion-table th {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 12px 10px;
+            text-align: left;
+            font-size: 0.92em;
+        }
+
+        .asignacion-table td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+            font-size: 0.92em;
+        }
+
+        .asignacion-table tr:nth-child(even) {
+            background: #fafcff;
+        }
+
+        .tipo-chip {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.85em;
+            background: #eef5ff;
+            color: #375a9e;
+        }
+
+        .estado-ok {
+            color: #127a2b;
+            font-weight: 600;
+        }
+
+        .estado-alerta {
+            color: #b26a00;
+            font-weight: 600;
+        }
+
+        .estado-critico {
+            color: #c62828;
+            font-weight: 600;
+        }
+
+        .lista-nombres {
+            line-height: 1.5;
+        }
+
+        .hint-text {
+            color: #666;
+            font-size: 0.88em;
+            margin-top: 8px;
+        }
+
+        .actions {
+            padding: 30px;
+            text-align: center;
+            background: #f8f9ff;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .download-actions {
+            text-align: center;
+            margin: 12px 0 18px;
+        }
+
+        .action-btn {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(79, 172, 254, 0.4);
+        }
+
+        .action-btn.secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .heatmap-table {
+                font-size: 0.9em;
+            }
+            
+            .action-btn {
+                display: block;
+                margin: 10px auto;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Resultados de Optimización</h1>
+            <p>Análisis de densidad y asignación de conductores</p>
+        </div>
+
+        <div class="results-section">
+            <!-- Resultados del Modelo 1: Densidad -->
+            <div class="model-results">
+                <div class="model-header">
+                    📊 Modelo 1: Análisis de Densidad de Demanda
+                </div>
+                <div class="heatmap-container">
+                    {% if densidad.heatmap_data %}
+                    <!-- Heatmap de Ida -->
+                    <div class="heatmap-title">🚌 Distribución Optimizada - Viajes de Ida</div>
+                    <table class="heatmap-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                {% for dia in densidad.heatmap_data.ida.dias %}
+                                <th>{{ dia }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for i in range(densidad.heatmap_data.ida.horas|length) %}
+                            <tr>
+                                <td class="time-cell">{{ densidad.heatmap_data.ida.horas[i] }}</td>
+                                {% for j in range(densidad.heatmap_data.ida.dias|length) %}
+                                <td class="heat-cell" style="background-color: hsl({{ (240 - densidad.heatmap_data.ida.matrix[i][j] * 40)|int }}, 70%, {{ (90 - densidad.heatmap_data.ida.matrix[i][j] * 15)|int }}%)">
+                                    {{ densidad.heatmap_data.ida.matrix[i][j] }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <!-- Heatmap de Vuelta -->
+                    <div class="heatmap-title">🏠 Distribución Optimizada - Viajes de Vuelta</div>
+                    <table class="heatmap-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                {% for dia in densidad.heatmap_data.vuelta.dias %}
+                                <th>{{ dia }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for i in range(densidad.heatmap_data.vuelta.horas|length) %}
+                            <tr>
+                                <td class="time-cell">{{ densidad.heatmap_data.vuelta.horas[i] }}</td>
+                                {% for j in range(densidad.heatmap_data.vuelta.dias|length) %}
+                                <td class="heat-cell" style="background-color: hsl({{ (240 - densidad.heatmap_data.vuelta.matrix[i][j] * 40)|int }}, 70%, {{ (90 - densidad.heatmap_data.vuelta.matrix[i][j] * 15)|int }}%)">
+                                    {{ densidad.heatmap_data.vuelta.matrix[i][j] }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No se pudieron generar los heatmaps de densidad.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Resultados del Modelo 2: Conductores -->
+            <div class="model-results">
+                <div class="model-header">
+                    🚗 Modelo 2: Asignación Óptima de Conductores
+                </div>
+                <div class="conductores-section">
+                    {% if conductores.grillas_viajes %}
+                    <div class="visual-mode-note">
+                        Modo visual: puedes arrastrar nombres entre celdas para simular cambios. Esto no modifica datos reales ni se guarda.
+                        <div class="visual-note-actions">
+                            <button type="button" id="restore-visual-grid" class="mini-btn">Restaurar vista original</button>
+                        </div>
+                    </div>
+                    <div id="grid-ida-container">
+                    <div class="agenda-title">🚌 Grilla de Ida (4 turnos x 4 dias)</div>
+                    <table class="agenda-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                {% for dia in conductores.grillas_viajes.ida.dias %}
+                                <th>{{ dia }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hora in conductores.grillas_viajes.ida.horas %}
+                            <tr>
+                                <td class="time-cell">{{ hora }}</td>
+                                {% for dia in conductores.grillas_viajes.ida.dias %}
+                                {% set celda = conductores.grillas_viajes.ida.celdas[dia][hora] %}
+                                <td>
+                                    <div class="agenda-slot">
+                                        <div class="agenda-meta">Demanda: {{ celda.demanda }} · Capacidad: {{ celda.capacidad }} · Deficit: {{ celda.deficit }}</div>
+                                        <div class="rol-box {% if celda.choferes %}chofer-activo{% endif %}">
+                                            <span class="rol-label">Chofer</span>
+                                            <div class="rol-value drop-zone" data-role="chofer">
+                                                {% if celda.choferes %}
+                                                    {% for nombre in celda.choferes %}
+                                                    <span class="persona-chip" draggable="true">{{ nombre }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="placeholder-chip">—</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="rol-box {% if celda.pasajeros and not celda.choferes %}pasajero-sin-chofer{% elif celda.pasajeros %}pasajero-ok{% endif %}">
+                                            <span class="rol-label">Pasajero</span>
+                                            <div class="rol-value drop-zone" data-role="pasajero">
+                                                {% if celda.pasajeros %}
+                                                    {% for nombre in celda.pasajeros %}
+                                                    <span class="persona-chip" draggable="true">{{ nombre }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="placeholder-chip">—</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="download-actions">
+                        <button type="button" class="action-btn" onclick="descargarGrid('grid-ida-container', 'horario_ida.jpg')">📷 Descargar Ida (JPG)</button>
+                    </div>
+
+                    <div id="grid-vuelta-container">
+                    <div class="agenda-title">🏠 Grilla de Vuelta (5 turnos x 4 dias)</div>
+                    <table class="agenda-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                {% for dia in conductores.grillas_viajes.vuelta.dias %}
+                                <th>{{ dia }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hora in conductores.grillas_viajes.vuelta.horas %}
+                            <tr>
+                                <td class="time-cell">{{ hora }}</td>
+                                {% for dia in conductores.grillas_viajes.vuelta.dias %}
+                                {% set celda = conductores.grillas_viajes.vuelta.celdas[dia][hora] %}
+                                <td>
+                                    <div class="agenda-slot">
+                                        <div class="agenda-meta">Demanda: {{ celda.demanda }} · Capacidad: {{ celda.capacidad }} · Deficit: {{ celda.deficit }}</div>
+                                        <div class="rol-box {% if celda.choferes %}chofer-activo{% endif %}">
+                                            <span class="rol-label">Chofer</span>
+                                            <div class="rol-value drop-zone" data-role="chofer">
+                                                {% if celda.choferes %}
+                                                    {% for nombre in celda.choferes %}
+                                                    <span class="persona-chip" draggable="true">{{ nombre }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="placeholder-chip">—</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="rol-box {% if celda.pasajeros and not celda.choferes %}pasajero-sin-chofer{% elif celda.pasajeros %}pasajero-ok{% endif %}">
+                                            <span class="rol-label">Pasajero</span>
+                                            <div class="rol-value drop-zone" data-role="pasajero">
+                                                {% if celda.pasajeros %}
+                                                    {% for nombre in celda.pasajeros %}
+                                                    <span class="persona-chip" draggable="true">{{ nombre }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="placeholder-chip">—</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="download-actions">
+                        <button type="button" class="action-btn" onclick="descargarGrid('grid-vuelta-container', 'horario_vuelta.jpg')">📷 Descargar Vuelta (JPG)</button>
+                    </div>
+                    <div class="hint-text">Cada celda muestra claramente el listado de choferes y pasajeros por dia y horario.</div>
+                    {% else %}
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        No se pudieron generar los resultados de asignación de conductores.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <a href="/admin" class="action-btn">📊 Volver al Panel</a>
+            <a href="/" class="action-btn secondary">🔙 Nuevo Usuario</a>
+            <a href="/download-csv" class="action-btn secondary">📥 Descargar Datos</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script>
+        let draggedChip = null;
+        let grillasOriginales = null;
+
+        function limpiarPlaceholder(zone) {
+            const placeholder = zone.querySelector('.placeholder-chip');
+            if (placeholder) {
+                placeholder.remove();
+            }
+        }
+
+        function asegurarPlaceholder(zone) {
+            if (!zone.querySelector('.persona-chip')) {
+                zone.innerHTML = '<span class="placeholder-chip">—</span>';
+            }
+        }
+
+        function habilitarDragVisual() {
+            const chips = document.querySelectorAll('.persona-chip');
+            const zones = document.querySelectorAll('.rol-value.drop-zone');
+
+            chips.forEach((chip) => {
+                chip.addEventListener('dragstart', () => {
+                    draggedChip = chip;
+                    chip.classList.add('dragging');
+                });
+
+                chip.addEventListener('dragend', () => {
+                    chip.classList.remove('dragging');
+                    draggedChip = null;
+                });
+            });
+
+            zones.forEach((zone) => {
+                zone.addEventListener('dragover', (event) => {
+                    event.preventDefault();
+                    zone.classList.add('drag-over');
+                });
+
+                zone.addEventListener('dragleave', () => {
+                    zone.classList.remove('drag-over');
+                });
+
+                zone.addEventListener('drop', (event) => {
+                    event.preventDefault();
+                    zone.classList.remove('drag-over');
+
+                    if (!draggedChip) {
+                        return;
+                    }
+
+                    const origen = draggedChip.parentElement;
+                    if (!origen || origen === zone) {
+                        return;
+                    }
+
+                    limpiarPlaceholder(zone);
+                    zone.appendChild(draggedChip);
+                    asegurarPlaceholder(origen);
+                });
+            });
+        }
+
+        function restaurarVistaOriginal() {
+            if (!grillasOriginales) {
+                return;
+            }
+
+            const ida = document.getElementById('grid-ida-container');
+            const vuelta = document.getElementById('grid-vuelta-container');
+
+            if (ida && vuelta) {
+                ida.innerHTML = grillasOriginales.ida;
+                vuelta.innerHTML = grillasOriginales.vuelta;
+                draggedChip = null;
+                habilitarDragVisual();
+            }
+        }
+
+        function descargarGrid(containerId, nombreArchivo) {
+            const contenedor = document.getElementById(containerId);
+            if (!contenedor) {
+                alert('No se encontró el bloque a descargar.');
+                return;
+            }
+
+            html2canvas(contenedor, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                useCORS: true
+            }).then((canvas) => {
+                const enlace = document.createElement('a');
+                enlace.download = nombreArchivo;
+                enlace.href = canvas.toDataURL('image/jpeg', 0.95);
+                enlace.click();
+            }).catch(() => {
+                alert('No se pudo generar la imagen. Intenta nuevamente.');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const ida = document.getElementById('grid-ida-container');
+            const vuelta = document.getElementById('grid-vuelta-container');
+            const restoreBtn = document.getElementById('restore-visual-grid');
+
+            if (ida && vuelta) {
+                grillasOriginales = {
+                    ida: ida.innerHTML,
+                    vuelta: vuelta.innerHTML
+                };
+            }
+
+            if (restoreBtn) {
+                restoreBtn.addEventListener('click', restaurarVistaOriginal);
+            }
+
+            habilitarDragVisual();
+        });
+    </script>
+</body>
+</html>
