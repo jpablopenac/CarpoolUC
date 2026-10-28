@@ -1,13 +1,13 @@
-Nombre,Timestamp,Lunes_Ida,Lunes_Vuelta,Lunes_Conductor,Lunes_Flex_Ida,Lunes_Flex_Vuelta,Martes_Ida,Martes_Vuelta,Martes_Conductor,Martes_Flex_Ida,Martes_Flex_Vuelta,Miercoles_Ida,Miercoles_Vuelta,Miercoles_Conductor,Miercoles_Flex_Ida,Miercoles_Flex_Vuelta,Jueves_Ida,Jueves_Vuelta,Jueves_Conductor,Jueves_Flex_Ida,Jueves_Flex_Vuelta,Voluntario_Segundo_Viaje
-Ana X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,11:00,16:00,Si,No,No,8:20,17:20,Si,No,No,11:00,17:20,Si,No,No,No
-Benjamin X,2026-01-01 10:00:00,9:40,13:30,No,No,No,9:40,10:50,Si,No,No,9:40,17:20,Si,No,No,9:40,13:30,No,No,No,No
-Camila X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,8:20,13:30,Si,No,No,8:20,13:30,Si,No,No,8:20,17:20,Si,No,No,No
-Diego X,2026-01-01 10:00:00,9:40,12:20,No,No,Si,9:40,16:00,Si,No,No,9:40,13:30,Si,No,No,9:40,16:00,Si,No,No,No
-Elena X,2026-01-01 10:00:00,9:40,13:30,Si,No,No,8:20,10:50,Si,No,No,9:40,13:30,Si,No,No,8:20,13:30,Si,No,No,No
-Felipe X,2026-01-01 10:00:00,9:40,13:30,Si,No,No,11:00,16:00,Si,No,No,11:00,13:30,Si,No,No,8:20,16:00,Si,No,No,No
-Gabriela X,2026-01-01 10:00:00,,,No,No,No,8:20,10:50,Si,No,No,8:20,13:30,Si,No,No,11:00,,No,No,No,No
-Hugo X,2026-01-01 10:00:00,8:20,13:30,No,No,No,8:20,12:20,No,No,Si,8:20,13:30,No,No,No,8:20,13:30,Si,No,No,No
-Ines X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,8:20,17:20,Si,No,No,8:20,13:30,Si,No,No,,,No,No,No,No
-Javier X,2026-01-01 10:00:00,9:40,17:20,Si,No,No,9:40,13:30,Si,No,No,9:40,13:30,Si,No,No,9:40,17:20,Si,No,No,No
-Karla X,2026-01-01 10:00:00,,,No,No,No,11:00,16:00,Si,No,No,,,No,No,No,11:00,13:30,Si,No,No,No
-Luis X,2026-01-01 10:00:00,8:20,17:20,No,No,No,8:20,17:20,No,No,No,8:20,,No,No,No,8:20,17:20,No,No,No,No
+Nombre,Timestamp,Lunes_Ida,Lunes_Vuelta,Lunes_Conductor,Lunes_Flex_Ida,Lunes_Flex_Vuelta,Martes_Ida,Martes_Vuelta,Martes_Conductor,Martes_Flex_Ida,Martes_Flex_Vuelta,Miercoles_Ida,Miercoles_Vuelta,Miercoles_Conductor,Miercoles_Flex_Ida,Miercoles_Flex_Vuelta,Jueves_Ida,Jueves_Vuelta,Jueves_Conductor,Jueves_Flex_Ida,Jueves_Flex_Vuelta,Voluntario_Segundo_Viaje,Cubre_A
+Ana X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,11:00,16:00,Si,No,No,8:20,17:20,Si,No,No,11:00,17:20,Si,No,No,No,Benjamin X
+Benjamin X,2026-01-01 10:00:00,9:40,13:30,No,No,No,9:40,10:50,Si,No,No,9:40,17:20,Si,No,No,9:40,13:30,No,No,No,No,
+Camila X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,8:20,13:30,Si,No,No,8:20,13:30,Si,No,No,8:20,17:20,Si,No,No,No,
+Diego X,2026-01-01 10:00:00,9:40,12:20,No,No,Si,9:40,16:00,Si,No,No,9:40,13:30,Si,No,No,9:40,16:00,Si,No,No,No,
+Elena X,2026-01-01 10:00:00,9:40,13:30,Si,No,No,8:20,10:50,Si,No,No,9:40,13:30,Si,No,No,8:20,13:30,Si,No,No,No,
+Felipe X,2026-01-01 10:00:00,9:40,13:30,Si,No,No,11:00,16:00,Si,No,No,11:00,13:30,Si,No,No,8:20,16:00,Si,No,No,No,
+Gabriela X,2026-01-01 10:00:00,,,No,No,No,8:20,10:50,Si,No,No,8:20,13:30,Si,No,No,11:00,,No,No,No,No,
+Hugo X,2026-01-01 10:00:00,8:20,13:30,No,No,No,8:20,12:20,No,No,Si,8:20,13:30,No,No,No,8:20,13:30,Si,No,No,No,
+Ines X,2026-01-01 10:00:00,8:20,13:30,Si,No,No,8:20,17:20,Si,No,No,8:20,13:30,Si,No,No,,,No,No,No,No,
+Javier X,2026-01-01 10:00:00,9:40,17:20,Si,No,No,9:40,13:30,Si,No,No,9:40,13:30,Si,No,No,9:40,17:20,Si,No,No,No,
+Karla X,2026-01-01 10:00:00,,,No,No,No,11:00,16:00,Si,No,No,,,No,No,No,11:00,13:30,Si,No,No,No,
+Luis X,2026-01-01 10:00:00,8:20,17:20,No,No,No,8:20,17:20,No,No,No,8:20,,No,No,No,8:20,17:20,No,No,No,No,

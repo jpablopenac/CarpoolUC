@@ -1,21 +1,22 @@
 """
-Módulo de Optimización de Transporte Universitario
+Modulo de Optimizacion de Transporte Universitario
 ===================================================
-Sistema de optimización en dos etapas:
-    - Etapa 1: Consolidación de demanda usando flexibilidad de usuarios
-    - Etapa 2: Asignación óptima de conductores usando PuLP
+Sistema de optimizacion en dos etapas:
+    - Etapa 1: Consolidacion de demanda usando flexibilidad de usuarios
+    - Etapa 2: Asignacion optima de conductores usando PuLP
 
 Reglas de Flexibilidad:
     - Flex_Ida: Usuario puede moverse 1 bloque ANTES (ej: 11:00→9:40)
-    - Flex_Vuelta: Usuario puede moverse 1 bloque DESPUÉS (ej: 16:00→17:20)
+    - Flex_Vuelta: Usuario puede moverse 1 bloque DESPUES (ej: 16:00→17:20)
     - Voluntario_Segundo_Viaje: Conductor puede hacer 2 viajes en la SEMANA
 
-Autor: Sistema de Optimización
+Autor: Sistema de Optimizacion
 Fecha: 2026
 """
 
 import pandas as pd
 import logging
+import unicodedata
 from pulp import *
 from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, field
@@ -23,7 +24,7 @@ from collections import defaultdict
 
 
 # =============================================================================
-# CONFIGURACIÓN DE LOGGING
+# CONFIGURACION DE LOGGING
 # =============================================================================
 
 logging.basicConfig(
@@ -35,23 +36,33 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# CONFIGURACIÓN GLOBAL
+# CONFIGURACION GLOBAL
 # =============================================================================
 
 DIAS = ['Lunes', 'Martes', 'Miercoles', 'Jueves']
 HORARIOS_IDA = ['8:20', '9:40', '11:00', '12:20']
 HORARIOS_VUELTA = ['10:50', '12:20', '13:30', '16:00', '17:20']
-# Capacidad = pasajeros que puede llevar cada conductor (sin contarlo a él)
+# Capacidad = pasajeros que puede llevar cada conductor (sin contarlo a el)
 # Auto con 5 asientos: 1 conductor + 4 pasajeros = CAPACIDAD_VEHICULO = 4
 CAPACIDAD_VEHICULO = 4
 
-# Excepciones de manejo por compensacion familiar.
-# Formato: {usuario_exento: usuario_que_compensa}
-EXCEPCIONES_COMPENSACION = {
-    'Magdalena S': 'Eduardo R',
-    'Gracia L': 'Pablo L',
-}
-COMPENSADORES_BLOQUEADOS_VOLUNTARIO = set(EXCEPCIONES_COMPENSACION.values())
+# Cobertura entre usuarios: quien cubre declara en la columna Cubre_A a quienes
+# cubre (nombres separados por ';'). Quien cubre maneja 1 dia extra por cada
+# persona cubierta y la persona cubierta puede viajar sin manejar.
+COLUMNA_COBERTURA = 'Cubre_A'
+SEPARADOR_COBERTURA = ';'
+
+
+def parsear_cobertura(valor) -> List[str]:
+    """Convierte el valor de la columna Cubre_A en una lista de nombres sin repetir"""
+    if valor is None or pd.isna(valor):
+        return []
+    nombres = []
+    for nombre in str(valor).split(SEPARADOR_COBERTURA):
+        nombre = nombre.strip()
+        if nombre and nombre not in nombres:
+            nombres.append(nombre)
+    return nombres
 
 
 # =============================================================================
@@ -71,7 +82,7 @@ class Usuario:
 
 @dataclass 
 class BloqueHorario:
-    """Representa un bloque de horario específico"""
+    """Representa un bloque de horario especifico"""
     dia: str
     horario: str
     tipo: str  # 'ida' o 'vuelta'
@@ -105,7 +116,7 @@ class BloqueHorario:
 
 @dataclass
 class ResultadoOptimizacion:
-    """Resultado de la optimización para un bloque"""
+    """Resultado de la optimizacion para un bloque"""
     dia: str
     horario: str
     tipo: str
@@ -119,17 +130,17 @@ class ResultadoOptimizacion:
 
 
 # =============================================================================
-# ETAPA 1: CONSOLIDACIÓN DE DEMANDA POR DENSIDAD
+# ETAPA 1: CONSOLIDACION DE DEMANDA POR DENSIDAD
 # =============================================================================
 
 class ConsolidadorDemanda:
     """
-    Etapa 1: Consolida la demanda moviendo usuarios flexibles a bloques más densos.
+    Etapa 1: Consolida la demanda moviendo usuarios flexibles a bloques mas densos.
     
     Reglas:
-    - Flex_Ida: Puede mover 1 bloque ANTES (índice menor en HORARIOS_IDA)
-    - Flex_Vuelta: Puede mover 1 bloque DESPUÉS (índice mayor en HORARIOS_VUELTA)
-    - Objetivo: Maximizar la concentración de usuarios en pocos bloques
+    - Flex_Ida: Puede mover 1 bloque ANTES (indice menor en HORARIOS_IDA)
+    - Flex_Vuelta: Puede mover 1 bloque DESPUES (indice mayor en HORARIOS_VUELTA)
+    - Objetivo: Maximizar la concentracion de usuarios en pocos bloques
     """
     
     def __init__(self, datos: pd.DataFrame):
@@ -137,6 +148,7 @@ class ConsolidadorDemanda:
         self.bloques_ida: Dict[str, Dict[str, BloqueHorario]] = {}
         self.bloques_vuelta: Dict[str, Dict[str, BloqueHorario]] = {}
         self.voluntarios_segundo_viaje: Set[str] = set()
+        self.coberturas: Dict[str, str] = {}  # {cubierto: quien_cubre}, segun la columna Cubre_A
         self.conductores_por_dia: Dict[str, Set[str]] = defaultdict(set)
         self.movimientos_realizados: List[Dict] = []
         
@@ -146,18 +158,19 @@ class ConsolidadorDemanda:
         
     def ejecutar(self) -> Tuple[Dict, Dict]:
         """
-        Ejecuta la consolidación completa.
+        Ejecuta la consolidacion completa.
         
         Returns:
             Tupla con (bloques_ida, bloques_vuelta) ya consolidados
         """
         self._inicializar_bloques()
         self._poblar_bloques()
+        self._aplicar_coberturas()
         self._consolidar_flexibles()
         return self.bloques_ida, self.bloques_vuelta
     
     def _inicializar_bloques(self):
-        """Inicializa la estructura de bloques vacíos"""
+        """Inicializa la estructura de bloques vacios"""
         for dia in DIAS:
             self.bloques_ida[dia] = {}
             self.bloques_vuelta[dia] = {}
@@ -176,7 +189,9 @@ class ConsolidadorDemanda:
         """Verifica si un valor representa True/Si"""
         if pd.isna(valor):
             return False
-        return str(valor).strip().lower() in ['si', 'sí', 'yes', '1', 'true']
+        texto = unicodedata.normalize('NFD', str(valor).strip().lower())
+        texto = ''.join(c for c in texto if not unicodedata.combining(c))
+        return texto in ['si', 'yes', '1', 'true']
     
     def _poblar_bloques(self):
         """Pobla los bloques con datos de usuarios del CSV"""
@@ -187,11 +202,19 @@ class ConsolidadorDemanda:
             self.todos_usuarios.add(nombre)
             
             # Verificar si es voluntario para segundo viaje
-            if (
-                self._es_booleano_positivo(row.get('Voluntario_Segundo_Viaje', ''))
-                and nombre not in COMPENSADORES_BLOQUEADOS_VOLUNTARIO
-            ):
+            if self._es_booleano_positivo(row.get('Voluntario_Segundo_Viaje', '')):
                 self.voluntarios_segundo_viaje.add(nombre)
+
+            # Registrar a quienes cubre este usuario (el primero que declara la cobertura la conserva)
+            for cubierto in parsear_cobertura(row.get(COLUMNA_COBERTURA)):
+                if cubierto == nombre:
+                    continue
+                if cubierto in self.coberturas:
+                    logger.warning(
+                        f"{cubierto} ya esta cubierto por {self.coberturas[cubierto]}; se ignora la cobertura de {nombre}"
+                    )
+                    continue
+                self.coberturas[cubierto] = nombre
             
             for dia in DIAS:
                 es_conductor = self._es_booleano_positivo(row.get(f'{dia}_Conductor', ''))
@@ -233,25 +256,29 @@ class ConsolidadorDemanda:
                     if es_conductor:
                         self.disponibilidad_conductor[nombre].append((dia, horario_vuelta, 'vuelta'))
     
+    def _aplicar_coberturas(self):
+        """Quien cubre a otro maneja sus dias extra, por lo que no puede ser voluntario de segundo viaje"""
+        self.voluntarios_segundo_viaje -= set(self.coberturas.values())
+
     def _obtener_horario_destino_ida(self, horario_actual: str) -> Optional[str]:
         """
-        Para IDA: Retorna el horario 1 bloque ANTES (más temprano).
+        Para IDA: Retorna el horario 1 bloque ANTES (mas temprano).
         Ej: 11:00 -> 9:40, 9:40 -> 8:20
         """
         idx = HORARIOS_IDA.index(horario_actual)
-        if idx > 0:  # Puede moverse hacia atrás
+        if idx > 0:  # Puede moverse hacia atras
             return HORARIOS_IDA[idx - 1]
-        return None  # Ya está en el primer horario
+        return None  # Ya esta en el primer horario
     
     def _obtener_horario_destino_vuelta(self, horario_actual: str) -> Optional[str]:
         """
-        Para VUELTA: Retorna el horario 1 bloque DESPUÉS (más tarde).
+        Para VUELTA: Retorna el horario 1 bloque DESPUES (mas tarde).
         Ej: 12:20 -> 13:30, 16:00 -> 17:20
         """
         idx = HORARIOS_VUELTA.index(horario_actual)
         if idx < len(HORARIOS_VUELTA) - 1:  # Puede moverse hacia adelante
             return HORARIOS_VUELTA[idx + 1]
-        return None  # Ya está en el último horario
+        return None  # Ya esta en el ultimo horario
     
     def _consolidar_flexibles(self):
         """
@@ -264,10 +291,10 @@ class ConsolidadorDemanda:
     
     def _consolidar_dia(self, dia: str, tipo: str):
         """
-        Optimiza la consolidación de un día/tipo específico usando PuLP.
+        Optimiza la consolidacion de un dia/tipo especifico usando PuLP.
         
         Objetivo: Mover usuarios flexibles para maximizar la densidad
-        de los bloques más poblados (minimizar fragmentación).
+        de los bloques mas poblados (minimizar fragmentacion).
         """
         bloques = self.bloques_ida[dia] if tipo == 'ida' else self.bloques_vuelta[dia]
         horarios = HORARIOS_IDA if tipo == 'ida' else HORARIOS_VUELTA
@@ -289,10 +316,10 @@ class ConsolidadorDemanda:
         if not usuarios_movibles:
             return  # No hay usuarios que mover
         
-        # Crear problema de optimización
+        # Crear problema de optimizacion
         problema = LpProblem(f"Consolidar_{dia}_{tipo}", LpMaximize)
         
-        # Variables de decisión: mover[i] = 1 si el usuario i se mueve
+        # Variables de decision: mover[i] = 1 si el usuario i se mueve
         mover = LpVariable.dicts(
             "mover",
             range(len(usuarios_movibles)),
@@ -300,28 +327,28 @@ class ConsolidadorDemanda:
         )
         
         # Calcular el beneficio de mover cada usuario
-        # Beneficio = demanda del bloque destino (queremos mover hacia bloques más densos)
+        # Beneficio = demanda del bloque destino (queremos mover hacia bloques mas densos)
         demanda_destino = []
         for _, _, destino in usuarios_movibles:
             demanda_destino.append(bloques[destino].demanda)
         
-        # FUNCIÓN OBJETIVO: Maximizar movimientos hacia bloques densos
-        # Ponderamos por la demanda del destino para priorizar consolidación
+        # FUNCION OBJETIVO: Maximizar movimientos hacia bloques densos
+        # Ponderamos por la demanda del destino para priorizar consolidacion
         problema += lpSum([
             mover[i] * (demanda_destino[i] + 1)  # +1 para que siempre valga mover
             for i in range(len(usuarios_movibles))
         ]), "Maximizar_Consolidacion"
         
-        # RESTRICCIÓN: Evitar que un bloque quede vacío si tiene usuarios fijos
-        # No se necesita restricción adicional porque solo movemos flexibles
+        # RESTRICCION: Evitar que un bloque quede vacio si tiene usuarios fijos
+        # No se necesita restriccion adicional porque solo movemos flexibles
         
-        # RESTRICCIÓN: No mover conductores si el bloque origen los necesita más
+        # RESTRICCION: No mover conductores si el bloque origen los necesita mas
         # (Opcional: mantener conductores en sus horarios originales)
         for i, (nombre, origen, _) in enumerate(usuarios_movibles):
             bloque_origen = bloques[origen]
             usuario = next((u for u in bloque_origen.usuarios if u.nombre == nombre), None)
             if usuario and usuario.es_conductor:
-                # Si es el único conductor en origen, no moverlo
+                # Si es el unico conductor en origen, no moverlo
                 conductores_en_origen = len(bloque_origen.conductores_disponibles)
                 if conductores_en_origen <= 1:
                     problema += mover[i] == 0, f"Mantener_Conductor_{i}"
@@ -360,7 +387,7 @@ class ConsolidadorDemanda:
                     })
     
     def obtener_estadisticas(self) -> Dict:
-        """Retorna estadísticas del análisis y consolidación"""
+        """Retorna estadisticas del analisis y consolidacion"""
         total_ida = sum(
             self.bloques_ida[d][h].demanda 
             for d in DIAS for h in HORARIOS_IDA
@@ -372,7 +399,7 @@ class ConsolidadorDemanda:
         
         total_conductores = len(set().union(*self.conductores_por_dia.values()) if self.conductores_por_dia else set())
         
-        # Contar usuarios flexibles que AÚN NO han sido movidos (disponibles para mover)
+        # Contar usuarios flexibles que AUN NO han sido movidos (disponibles para mover)
         flexibles_ida = sum(
             len([u for u in self.bloques_ida[d][h].usuarios_flexibles if not u.fue_movido])
             for d in DIAS for h in HORARIOS_IDA
@@ -398,8 +425,8 @@ class ConsolidadorDemanda:
             if u not in self.disponibilidad_conductor or len(self.disponibilidad_conductor[u]) == 0
         ]
         
-        # Usuarios con solo 1 día disponible (deben manejar ese día sí o sí)
-        # Nota: disponibilidad_conductor contiene slots (dia, horario, tipo), hay que contar días únicos
+        # Usuarios con solo 1 dia disponible (deben manejar ese dia si o si)
+        # Nota: disponibilidad_conductor contiene slots (dia, horario, tipo), hay que contar dias unicos
         usuarios_un_solo_dia = [
             u for u in self.todos_usuarios 
             if u in self.disponibilidad_conductor and len(set(slot[0] for slot in self.disponibilidad_conductor[u])) == 1
@@ -411,7 +438,7 @@ class ConsolidadorDemanda:
             'total_registros_vuelta': total_vuelta,
             'total_conductores_unicos': total_conductores,
             'voluntarios_segundo_viaje': len(self.voluntarios_segundo_viaje),
-            'usuarios_flexibles_ida': flexibles_ida,  # Flexibles que AÚN pueden moverse
+            'usuarios_flexibles_ida': flexibles_ida,  # Flexibles que AUN pueden moverse
             'usuarios_flexibles_vuelta': flexibles_vuelta,
             'usuarios_movidos_ida': usuarios_movidos_ida,  # Ya fueron movidos
             'usuarios_movidos_vuelta': usuarios_movidos_vuelta,
@@ -425,7 +452,7 @@ class ConsolidadorDemanda:
         }
     
     def _obtener_horario_pico(self, tipo: str) -> Optional[Tuple[str, str, int]]:
-        """Obtiene el horario con mayor demanda después de consolidación"""
+        """Obtiene el horario con mayor demanda despues de consolidacion"""
         bloques = self.bloques_ida if tipo == 'ida' else self.bloques_vuelta
         horarios = HORARIOS_IDA if tipo == 'ida' else HORARIOS_VUELTA
         
@@ -442,7 +469,7 @@ class ConsolidadorDemanda:
         return pico
     
     def generar_heatmap_data(self) -> Dict:
-        """Genera datos para visualización de heatmaps"""
+        """Genera datos para visualizacion de heatmaps"""
         matriz_ida = pd.DataFrame(index=HORARIOS_IDA, columns=DIAS, dtype=int).fillna(0)
         matriz_vuelta = pd.DataFrame(index=HORARIOS_VUELTA, columns=DIAS, dtype=int).fillna(0)
         
@@ -489,53 +516,105 @@ class ConsolidadorDemanda:
 
 
 # =============================================================================
-# ETAPA 2: ASIGNACIÓN ÓPTIMA DE CONDUCTORES CON PULP
+# ETAPA 2: ASIGNACION OPTIMA DE CONDUCTORES CON PULP
 # =============================================================================
 
 class OptimizadorConductores:
     """
-    Etapa 2: Optimiza la asignación de conductores usando Programación Lineal.
+    Etapa 2: Optimiza la asignacion de conductores usando Programacion Lineal.
     
-    REGLA DE ORO: Para ser pasajero, DEBES manejar mínimo 1 día a la semana.
+    REGLA DE ORO: Para ser pasajero, DEBES manejar minimo 1 dia a la semana.
     La "forma de pago" es manejar. No puedes ser solo pasajero.
     
     Considera:
-    - TODOS los usuarios deben manejar mínimo 1 día por semana
-    - Si un conductor maneja IDA un día, debe manejar también VUELTA ese mismo día (y viceversa)
-    - Voluntario_Segundo_Viaje: Puede conducir hasta 2 días en la SEMANA
-    - Usuarios normales: Máximo 1 día por semana
-    - Optimización global de toda la semana
+    - TODOS los usuarios deben manejar minimo 1 dia por semana
+    - Si un conductor maneja IDA un dia, debe manejar tambien VUELTA ese mismo dia (y viceversa)
+    - Voluntario_Segundo_Viaje: Puede conducir hasta 2 dias en la SEMANA
+    - Usuarios normales: Maximo 1 dia por semana
+    - Optimizacion global de toda la semana
     """
     
     def __init__(self, bloques_ida: Dict, bloques_vuelta: Dict,
                  todos_usuarios: Set[str],
                  disponibilidad_conductor: Dict[str, List[Tuple[str, str, str]]],
                  voluntarios_segundo_viaje: Set[str],
-                 capacidad_vehiculo: int = CAPACIDAD_VEHICULO):
+                 capacidad_vehiculo: int = CAPACIDAD_VEHICULO,
+                 coberturas: Optional[Dict[str, str]] = None):
         self.bloques_ida = bloques_ida
         self.bloques_vuelta = bloques_vuelta
         self.todos_usuarios = todos_usuarios  # TODOS los que quieren usar el sistema
         self.disponibilidad = disponibilidad_conductor  # {usuario: [(dia, horario, tipo), ...]}
         self.voluntarios = voluntarios_segundo_viaje
         self.capacidad = capacidad_vehiculo
+        self.coberturas_declaradas = coberturas or {}  # {cubierto: quien_cubre}
         self.resultados: List[ResultadoOptimizacion] = []
         self.estado_solucion = None
-        self.razon_infactible = None  # Explicación si el problema no tiene solución
+        self.razon_infactible = None  # Explicacion si el problema no tiene solucion
         self.asignaciones_conductor: Dict[str, List[Dict]] = defaultdict(list)
-        self.usuarios_sin_disponibilidad: List[str] = []  # Usuarios que no pueden manejar ningún día
-        self.usuarios_un_solo_dia: List[str] = []  # Usuarios que solo pueden manejar 1 día (DEBEN manejar ese día)
+        self.usuarios_sin_disponibilidad: List[str] = []  # Usuarios que no pueden manejar ningun dia
+        self.usuarios_un_solo_dia: List[str] = []  # Usuarios que solo pueden manejar 1 dia (DEBEN manejar ese dia)
         self.exentos_compensados: Dict[str, str] = {}  # {exento: compensador}
         self.exentos_manejo: Set[str] = set()
         self.compensadores_activos: Dict[str, int] = {}  # {compensador: cantidad_exentos}
         
+    def _dias_manejables(self, usuario: str) -> int:
+        """Dias en que el usuario puede manejar: manejar un dia exige ida y vuelta disponibles"""
+        tipos_por_dia = defaultdict(set)
+        for dia, _, tipo in self.disponibilidad.get(usuario, []):
+            tipos_por_dia[dia].add(tipo)
+        return sum(1 for tipos in tipos_por_dia.values() if {'ida', 'vuelta'} <= tipos)
+
+    def _resolver_coberturas(self, usuarios_validos: List[str]) -> Dict[str, str]:
+        """
+        Filtra las coberturas declaradas y deja solo las que se pueden cumplir.
+
+        Se descarta una cobertura si:
+        - el cubierto no esta en el sistema,
+        - quien cubre no tiene disponibilidad para manejar,
+        - quien cubre tambien esta cubierto por otro (no puede manejar 0 y 2 dias a la vez),
+        - quien cubre no tiene dias manejables suficientes para cubrir a todos
+          (un dia solo cuenta si tiene disponibilidad de ida y de vuelta).
+
+        Returns:
+            {cubierto: quien_cubre} con las coberturas vigentes
+        """
+        candidatas = {}
+        for cubierto, cubridor in self.coberturas_declaradas.items():
+            if cubierto not in self.todos_usuarios:
+                continue
+            if cubridor not in usuarios_validos:
+                logger.warning(
+                    f"{cubridor} cubre a {cubierto}, pero no tiene disponibilidad para manejar; se ignora la cobertura"
+                )
+                continue
+            candidatas[cubierto] = cubridor
+
+        vigentes = {}
+        dias_asignados = defaultdict(int)
+        for cubierto, cubridor in candidatas.items():
+            if cubridor in candidatas:
+                logger.warning(
+                    f"{cubridor} cubre a {cubierto} pero tambien esta cubierto por {candidatas[cubridor]}; se ignora la cobertura"
+                )
+                continue
+            dias_disponibles = self._dias_manejables(cubridor)
+            if dias_disponibles < 1 + dias_asignados[cubridor] + 1:
+                logger.warning(
+                    f"{cubridor} solo tiene {dias_disponibles} dia(s) manejable(s) y no alcanza a cubrir a {cubierto}; se ignora la cobertura"
+                )
+                continue
+            vigentes[cubierto] = cubridor
+            dias_asignados[cubridor] += 1
+        return vigentes
+
     def optimizar(self) -> List[ResultadoOptimizacion]:
         """
-        Ejecuta la optimización global de toda la semana.
+        Ejecuta la optimizacion global de toda la semana.
         
-        REGLA DE ORO: Todos deben manejar mínimo 1 día para poder ser pasajeros.
+        REGLA DE ORO: Todos deben manejar minimo 1 dia para poder ser pasajeros.
         
         Returns:
-            Lista de resultados de optimización por bloque
+            Lista de resultados de optimizacion por bloque
         """
         self.resultados = []
         
@@ -559,31 +638,22 @@ class OptimizadorConductores:
             if u not in self.disponibilidad or len(self.disponibilidad[u]) == 0
         ]
         
-        # Identificar usuarios con solo 1 día disponible (OBLIGADOS a manejar ese día)
-        # Nota: disponibilidad contiene slots (dia, horario, tipo), hay que contar días únicos
+        # Identificar usuarios con solo 1 dia disponible (OBLIGADOS a manejar ese dia)
+        # Nota: disponibilidad contiene slots (dia, horario, tipo), hay que contar dias unicos
         self.usuarios_un_solo_dia = [
             u for u in self.todos_usuarios 
             if u in self.disponibilidad and len(set(slot[0] for slot in self.disponibilidad[u])) == 1
         ]
         
-        # Solo consideramos usuarios que SÍ pueden manejar
+        # Solo consideramos usuarios que SI pueden manejar
         usuarios_validos = [u for u in self.todos_usuarios if u in self.disponibilidad and len(self.disponibilidad[u]) > 0]
 
-        # Excepciones activas: exentos presentes en el sistema, con compensador valido.
-        self.exentos_compensados = {}
-        compensadores_activos = defaultdict(int)
-        for exento, compensador in EXCEPCIONES_COMPENSACION.items():
-            if exento not in self.todos_usuarios:
-                continue
-            if compensador not in usuarios_validos:
-                logger.warning(
-                    f"Excepcion activa para {exento}, pero su compensador {compensador} no tiene disponibilidad valida"
-                )
-                continue
-            self.exentos_compensados[exento] = compensador
-            compensadores_activos[compensador] += 1
-
+        # Coberturas activas: cubiertos presentes en el sistema, con quien cubre valido.
+        self.exentos_compensados = self._resolver_coberturas(usuarios_validos)
         self.exentos_manejo = set(self.exentos_compensados.keys())
+        compensadores_activos = defaultdict(int)
+        for compensador in self.exentos_compensados.values():
+            compensadores_activos[compensador] += 1
         self.compensadores_activos = dict(compensadores_activos)
         
         if not usuarios_validos or not slots:
@@ -600,10 +670,10 @@ class OptimizadorConductores:
                 ))
             return self.resultados
         
-        # Crear problema de optimización GLOBAL
+        # Crear problema de optimizacion GLOBAL
         problema = LpProblem("Asignacion_Semanal", LpMaximize)
         
-        # Variables de decisión: x[usuario, slot_idx] = 1 si usuario maneja en ese slot
+        # Variables de decision: x[usuario, slot_idx] = 1 si usuario maneja en ese slot
         x = LpVariable.dicts(
             "asignacion",
             [(u, i) for u in usuarios_validos for i in range(len(slots))],
@@ -618,17 +688,17 @@ class OptimizadorConductores:
             cat='Integer'
         )
 
-        # Variables auxiliares por día
+        # Variables auxiliares por dia
         y = LpVariable.dicts(
             "asignacion_dia",
             [(u, d) for u in usuarios_validos for d in DIAS],
             cat='Binary'
         )
         
-        # FUNCIÓN OBJETIVO: Maximizar pasajeros cubiertos
+        # FUNCION OBJETIVO: Maximizar pasajeros cubiertos
         problema += lpSum([pasajeros[i] for i in range(len(slots))]), "Maximizar_Cobertura"
         
-        # RESTRICCIÓN 1: Usuario solo puede asignarse donde tiene disponibilidad
+        # RESTRICCION 1: Usuario solo puede asignarse donde tiene disponibilidad
         for u in usuarios_validos:
             disponibles_usuario = set(self.disponibilidad.get(u, []))
             for i, (dia, horario, tipo, bloque) in enumerate(slots):
@@ -636,7 +706,7 @@ class OptimizadorConductores:
                 if slot_key not in disponibles_usuario:
                     problema += x[(u, i)] == 0, f"Disponibilidad_{u}_{i}"
 
-        # RESTRICCIÓN 2: Consistencia ida/vuelta por día (si maneja uno, maneja ambos)
+        # RESTRICCION 2: Consistencia ida/vuelta por dia (si maneja uno, maneja ambos)
         for u in usuarios_validos:
             disponibles_usuario = set(self.disponibilidad.get(u, []))
             for dia in DIAS:
@@ -661,8 +731,8 @@ class OptimizadorConductores:
                 else:
                     problema += y[(u, dia)] == 0, f"Dia_Sin_Disponibilidad_{u}_{dia}"
 
-        # RESTRICCIÓN 3: REGLA DE ORO (mínimo 1 día por semana)
-        # Exentos compensados: no manejan (0 días), su compensador cubre el aporte.
+        # RESTRICCION 3: REGLA DE ORO (minimo 1 dia por semana)
+        # Exentos compensados: no manejan (0 dias), su compensador cubre el aporte.
         for u in usuarios_validos:
             minimo_dias = 0 if u in self.exentos_manejo else 1
             problema += (
@@ -676,14 +746,14 @@ class OptimizadorConductores:
                     f"Exento_No_Maneja_{u}"
                 )
 
-        # RESTRICCIÓN 3B: Compensadores deben cubrir aporte propio + exentos asociados.
+        # RESTRICCION 3B: Compensadores deben cubrir aporte propio + exentos asociados.
         for compensador, cantidad_exentos in self.compensadores_activos.items():
             problema += (
                 lpSum([y[(compensador, d)] for d in DIAS]) >= (1 + cantidad_exentos),
                 f"Compensacion_{compensador}"
             )
 
-        # RESTRICCIÓN 4: Límite MÁXIMO de días por usuario
+        # RESTRICCION 4: Limite MAXIMO de dias por usuario
         for u in usuarios_validos:
             max_dias = 2 if u in self.voluntarios else 1
             if u in self.compensadores_activos:
@@ -693,15 +763,15 @@ class OptimizadorConductores:
                 f"Max_Dias_{u}"
             )
         
-        # RESTRICCIÓN 5: Pasajeros cubiertos <= capacidad * conductores asignados
-        # Cada conductor cubre: él mismo + CAPACIDAD pasajeros = (CAPACIDAD + 1) personas
+        # RESTRICCION 5: Pasajeros cubiertos <= capacidad * conductores asignados
+        # Cada conductor cubre: el mismo + CAPACIDAD pasajeros = (CAPACIDAD + 1) personas
         for i in range(len(slots)):
             problema += (
                 pasajeros[i] <= (self.capacidad + 1) * lpSum([x[(u, i)] for u in usuarios_validos]),
                 f"Capacidad_{i}"
             )
         
-        # RESTRICCIÓN 6: Pasajeros cubiertos <= demanda real
+        # RESTRICCION 6: Pasajeros cubiertos <= demanda real
         for i, (_, _, _, bloque) in enumerate(slots):
             problema += pasajeros[i] <= bloque.demanda, f"Demanda_{i}"
         
@@ -709,15 +779,15 @@ class OptimizadorConductores:
         problema.solve(PULP_CBC_CMD(msg=0))
         self.estado_solucion = LpStatus[problema.status]
         
-        # Detectar problema INFACTIBLE y dar explicación
+        # Detectar problema INFACTIBLE y dar explicacion
         if self.estado_solucion == 'Infeasible':
-            # Calcular métricas para explicar por qué es infactible
+            # Calcular metricas para explicar por que es infactible
             total_slots_disponibles = sum(len(self.disponibilidad.get(u, [])) for u in usuarios_validos)
-            logger.warning(f"PROBLEMA INFACTIBLE: {len(usuarios_validos)} usuarios deben manejar >= 1 día")
+            logger.warning(f"PROBLEMA INFACTIBLE: {len(usuarios_validos)} usuarios deben manejar >= 1 dia")
             logger.warning(f"Total slots disponibles en el sistema: {total_slots_disponibles}")
             logger.warning(f"Slots con demanda: {len(slots)}")
             
-            # Identificar usuarios problemáticos (con muy pocos slots disponibles)
+            # Identificar usuarios problematicos (con muy pocos slots disponibles)
             usuarios_problematicos = [
                 (u, len(self.disponibilidad.get(u, []))) 
                 for u in usuarios_validos 
@@ -729,10 +799,10 @@ class OptimizadorConductores:
             self.razon_infactible = (
                 f"No es posible asignar a todos los {len(usuarios_validos)} usuarios. "
                 f"Hay {len(slots)} slots con demanda pero la disponibilidad de conductores es insuficiente. "
-                f"Considera: agregar más días de disponibilidad o permitir que algunos no manejen."
+                f"Considera: agregar mas dias de disponibilidad o permitir que algunos no manejen."
             )
             
-            # Retornar resultados vacíos pero con información
+            # Retornar resultados vacios pero con informacion
             for dia, horario, tipo, bloque in slots:
                 self.resultados.append(ResultadoOptimizacion(
                     dia=dia, horario=horario, tipo=tipo,
@@ -756,10 +826,10 @@ class OptimizadorConductores:
                     'dia': dia, 'horario': horario, 'tipo': tipo
                 })
             
-            # Capacidad total: cada conductor cubre él mismo + CAPACIDAD pasajeros
+            # Capacidad total: cada conductor cubre el mismo + CAPACIDAD pasajeros
             capacidad_total = len(conductores_asignados) * (self.capacidad + 1)
             
-            # Cálculo robusto de pasajeros cubiertos
+            # Calculo robusto de pasajeros cubiertos
             pax_valor = value(pasajeros[i])
             pax_cubiertos = min(int(pax_valor) if pax_valor is not None else 0, bloque.demanda)
             
@@ -779,7 +849,7 @@ class OptimizadorConductores:
         return self.resultados
     
     def obtener_resumen(self) -> Dict:
-        """Genera un resumen de la optimización"""
+        """Genera un resumen de la optimizacion"""
         if not self.resultados:
             return {}
         
@@ -794,7 +864,7 @@ class OptimizadorConductores:
 
         conductores_doble_viaje = [c for c in conductores_unicos if _dias_asignados(c) == 2]
         
-        # Por día
+        # Por dia
         por_dia = defaultdict(lambda: {'demanda': 0, 'cubiertos': 0, 'deficit': 0, 'conductores': set()})
         for r in self.resultados:
             por_dia[r.dia]['demanda'] += r.demanda_total
@@ -812,7 +882,7 @@ class OptimizadorConductores:
                 'cobertura_pct': round(datos['cubiertos'] / datos['demanda'] * 100, 1) if datos['demanda'] > 0 else 0
             }
         
-        # Usuarios que manejan exactamente 1 día (cumplieron el mínimo)
+        # Usuarios que manejan exactamente 1 dia (cumplieron el minimo)
         usuarios_un_viaje = [c for c in conductores_unicos if _dias_asignados(c) == 1]
         
         return {
@@ -835,7 +905,7 @@ class OptimizadorConductores:
         }
     
     def obtener_grid_resultados(self) -> Dict:
-        """Genera estructura de grid para visualización"""
+        """Genera estructura de grid para visualizacion"""
         grid = {dia: {'ida': {}, 'vuelta': {}} for dia in DIAS}
         
         for r in self.resultados:
@@ -920,22 +990,22 @@ class OptimizadorConductores:
 
 
 # =============================================================================
-# FUNCIÓN PRINCIPAL DE EJECUCIÓN
+# FUNCION PRINCIPAL DE EJECUCION
 # =============================================================================
 
 def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO) -> Dict:
     """
-    Función principal que ejecuta el pipeline completo de optimización.
+    Funcion principal que ejecuta el pipeline completo de optimizacion.
     
     Etapa 1: Consolida demanda moviendo usuarios flexibles
-    Etapa 2: Asigna conductores óptimamente (considerando voluntarios segundo viaje)
+    Etapa 2: Asigna conductores optimamente (considerando voluntarios segundo viaje)
     
     Args:
         archivo_csv: Ruta al archivo CSV con los datos
-        capacidad: Capacidad de cada vehículo
+        capacidad: Capacidad de cada vehiculo
         
     Returns:
-        Diccionario con todos los resultados de la optimización
+        Diccionario con todos los resultados de la optimizacion
     """
     # Cargar datos
     try:
@@ -948,16 +1018,16 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
     if datos.empty or len(datos) == 0:
         return {'error': 'No hay datos para optimizar', 'exito': False}
     
-    # Eliminar duplicados: si hay 2+ registros con el mismo nombre, mantener el más reciente
+    # Eliminar duplicados: si hay 2+ registros con el mismo nombre, mantener el mas reciente
     if 'Nombre' in datos.columns:
         duplicados_antes = len(datos)
-        # Ordenar por Timestamp (más reciente primero) si existe, luego eliminar duplicados por Nombre
+        # Ordenar por Timestamp (mas reciente primero) si existe, luego eliminar duplicados por Nombre
         if 'Timestamp' in datos.columns:
             datos = datos.sort_values('Timestamp', ascending=False)
         datos = datos.drop_duplicates(subset=['Nombre'], keep='first')
         duplicados_eliminados = duplicados_antes - len(datos)
         if duplicados_eliminados > 0:
-            logger.warning(f"Se eliminaron {duplicados_eliminados} registros duplicados (se mantuvo el más reciente por nombre)")
+            logger.warning(f"Se eliminaron {duplicados_eliminados} registros duplicados (se mantuvo el mas reciente por nombre)")
     
     # Verificar que hay al menos una columna de horario con datos
     tiene_datos = False
@@ -974,7 +1044,7 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
     if not tiene_datos:
         return {'error': 'No hay datos de horarios para optimizar', 'exito': False}
     
-    # ETAPA 1: Consolidación de Demanda
+    # ETAPA 1: Consolidacion de Demanda
     consolidador = ConsolidadorDemanda(datos)
     bloques_ida, bloques_vuelta = consolidador.ejecutar()
     
@@ -985,13 +1055,14 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
     bloques_densos_ida = consolidador.obtener_bloques_ordenados('ida')
     bloques_densos_vuelta = consolidador.obtener_bloques_ordenados('vuelta')
     
-    # ETAPA 2: Optimización de Conductores (con REGLA DE ORO)
+    # ETAPA 2: Optimizacion de Conductores (con REGLA DE ORO)
     optimizador = OptimizadorConductores(
         bloques_ida, bloques_vuelta,
         consolidador.todos_usuarios,  # TODOS los usuarios del sistema
         consolidador.disponibilidad_conductor,  # Disponibilidad de cada uno como conductor
         consolidador.voluntarios_segundo_viaje,
-        capacidad
+        capacidad,
+        consolidador.coberturas
     )
     resultados = optimizador.optimizar()
     
@@ -1003,7 +1074,7 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
         'exito': True,
         'total_usuarios': len(datos),
         
-        # Resultados Etapa 1: Consolidación
+        # Resultados Etapa 1: Consolidacion
         'densidad': {
             'estadisticas': estadisticas,
             'heatmap_data': heatmap_data,
@@ -1033,7 +1104,7 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
             ]
         },
         
-        # Resultados Etapa 2: Asignación de Conductores
+        # Resultados Etapa 2: Asignacion de Conductores
         'conductores': {
             'resumen': resumen,
             'grid_resultados': grid_resultados,
@@ -1058,27 +1129,27 @@ def ejecutar_optimizacion(archivo_csv: str, capacidad: int = CAPACIDAD_VEHICULO)
 
 
 # =============================================================================
-# EJECUCIÓN DIRECTA PARA PRUEBAS
+# EJECUCION DIRECTA PARA PRUEBAS
 # =============================================================================
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("SISTEMA DE OPTIMIZACIÓN DE TRANSPORTE UNIVERSITARIO")
+    print("SISTEMA DE OPTIMIZACION DE TRANSPORTE UNIVERSITARIO")
     print("=" * 70)
     
     resultado = ejecutar_optimizacion('datos_usuarios.csv')
     
     if resultado.get('exito'):
-        print(f"\n✓ Optimización completada para {resultado['total_usuarios']} usuarios")
+        print(f"\n✓ Optimizacion completada para {resultado['total_usuarios']} usuarios")
         
         print("\n" + "-" * 70)
-        print("ETAPA 1: CONSOLIDACIÓN DE DEMANDA")
+        print("ETAPA 1: CONSOLIDACION DE DEMANDA")
         print("-" * 70)
         stats = resultado['densidad']['estadisticas']
         print(f"  Total usuarios:            {stats['total_usuarios']}")
         print(f"  Total registros (ida):     {stats['total_registros_ida']}")
         print(f"  Total registros (vuelta):  {stats['total_registros_vuelta']}")
-        print(f"  Conductores únicos:        {stats['total_conductores_unicos']}")
+        print(f"  Conductores unicos:        {stats['total_conductores_unicos']}")
         print(f"  Voluntarios 2do viaje:     {stats['voluntarios_segundo_viaje']}")
         print(f"  Usuarios movidos (ida):    {stats.get('usuarios_movidos_ida', 0)}")
         print(f"  Usuarios movidos (vuelta): {stats.get('usuarios_movidos_vuelta', 0)}")
@@ -1098,24 +1169,24 @@ if __name__ == '__main__':
                 print(f"    • {mov['usuario']}: {mov['dia']} {mov['tipo']} {mov['origen']} → {mov['destino']}")
         
         print("\n" + "-" * 70)
-        print("ETAPA 2: ASIGNACIÓN DE CONDUCTORES (REGLA DE ORO)")
+        print("ETAPA 2: ASIGNACION DE CONDUCTORES (REGLA DE ORO)")
         print("-" * 70)
-        print("  Regla: Todos manejan mínimo 1 día para poder ser pasajeros")
+        print("  Regla: Todos manejan minimo 1 dia para poder ser pasajeros")
         print()
         resumen = resultado['conductores']['resumen']
-        print(f"  Estado solución:           {resumen.get('estado_solucion', 'N/A')}")
+        print(f"  Estado solucion:           {resumen.get('estado_solucion', 'N/A')}")
         
-        # Si el problema es infactible, mostrar la razón
+        # Si el problema es infactible, mostrar la razon
         if resumen.get('estado_solucion') == 'Infeasible':
-            print(f"\n  ❌ PROBLEMA SIN SOLUCIÓN:")
-            print(f"     {resumen.get('razon_infactible', 'Razón desconocida')}")
+            print(f"\n  ❌ PROBLEMA SIN SOLUCION:")
+            print(f"     {resumen.get('razon_infactible', 'Razon desconocida')}")
             print()
         
         print(f"  Demanda total:             {resumen.get('total_demanda', 0)}")
         print(f"  Pasajeros cubiertos:       {resumen.get('total_cubiertos', 0)}")
-        print(f"  Déficit:                   {resumen.get('total_deficit', 0)}")
+        print(f"  Deficit:                   {resumen.get('total_deficit', 0)}")
         print(f"  Total conductores:         {resumen.get('total_conductores_asignados', 0)}")
-        print(f"  - Con 1 viaje (mínimo):    {resumen.get('usuarios_un_viaje', 0)}")
+        print(f"  - Con 1 viaje (minimo):    {resumen.get('usuarios_un_viaje', 0)}")
         print(f"  - Con 2 viajes (voluntarios): {resumen.get('conductores_doble_viaje', 0)}")
         print(f"  Cobertura global:          {resumen.get('cobertura_global_pct', 0)}%")
         
@@ -1125,15 +1196,15 @@ if __name__ == '__main__':
             for u in resumen['usuarios_sin_disponibilidad']:
                 print(f"      ✗ {u}")
         
-        # Mostrar usuarios con solo 1 día disponible (OBLIGADOS)
+        # Mostrar usuarios con solo 1 dia disponible (OBLIGADOS)
         if resumen.get('usuarios_un_solo_dia'):
-            print(f"\n  ℹ️  USUARIOS CON SOLO 1 DÍA DISPONIBLE (deben manejar obligatoriamente):")
+            print(f"\n  ℹ️  USUARIOS CON SOLO 1 DIA DISPONIBLE (deben manejar obligatoriamente):")
             for u in resumen['usuarios_un_solo_dia']:
                 print(f"      → {u}")
         
         # Mostrar asignaciones de usuarios con 1 viaje
         if resumen.get('detalle_un_viaje'):
-            print("\n  Asignaciones (1 viaje - mínimo obligatorio):")
+            print("\n  Asignaciones (1 viaje - minimo obligatorio):")
             for c, viajes in resumen['detalle_un_viaje'].items():
                 viajes_str = ", ".join([f"{v['dia']} {v['tipo']} {v['horario']}" for v in viajes])
                 print(f"    • {c}: {viajes_str}")
@@ -1145,9 +1216,9 @@ if __name__ == '__main__':
                 viajes_str = ", ".join([f"{v['dia']} {v['tipo']} {v['horario']}" for v in viajes])
                 print(f"    • {c}: {viajes_str}")
         
-        print("\n  Resumen por día:")
+        print("\n  Resumen por dia:")
         for dia, datos in resumen.get('por_dia', {}).items():
             print(f"    {dia}: Demanda={datos['demanda']}, Cubiertos={datos['cubiertos']}, "
-                  f"Déficit={datos['deficit']}, Cobertura={datos['cobertura_pct']}%")
+                  f"Deficit={datos['deficit']}, Cobertura={datos['cobertura_pct']}%")
     else:
         print(f"\n✗ Error: {resultado.get('error')}")

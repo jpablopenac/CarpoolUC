@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resultados de Optimización</title>
+    <title>Resultados de Optimizacion</title>
     <style>
         * {
             margin: 0;
@@ -400,20 +400,20 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 Resultados de Optimización</h1>
-            <p>Análisis de densidad y asignación de conductores</p>
+            <h1>🎯 Resultados de Optimizacion</h1>
+            <p>Analisis de densidad y asignacion de conductores</p>
         </div>
 
         <div class="results-section">
             <!-- Resultados del Modelo 1: Densidad -->
             <div class="model-results">
                 <div class="model-header">
-                    📊 Modelo 1: Análisis de Densidad de Demanda
+                    📊 Modelo 1: Analisis de Densidad de Demanda
                 </div>
                 <div class="heatmap-container">
                     {% if densidad.heatmap_data %}
                     <!-- Heatmap de Ida -->
-                    <div class="heatmap-title">🚌 Distribución Optimizada - Viajes de Ida</div>
+                    <div class="heatmap-title">🚌 Distribucion Optimizada - Viajes de Ida</div>
                     <table class="heatmap-table">
                         <thead>
                             <tr>
@@ -438,7 +438,7 @@
                     </table>
 
                     <!-- Heatmap de Vuelta -->
-                    <div class="heatmap-title">🏠 Distribución Optimizada - Viajes de Vuelta</div>
+                    <div class="heatmap-title">🏠 Distribucion Optimizada - Viajes de Vuelta</div>
                     <table class="heatmap-table">
                         <thead>
                             <tr>
@@ -472,7 +472,7 @@
             <!-- Resultados del Modelo 2: Conductores -->
             <div class="model-results">
                 <div class="model-header">
-                    🚗 Modelo 2: Asignación Óptima de Conductores
+                    🚗 Modelo 2: Asignacion Optima de Conductores
                 </div>
                 <div class="conductores-section">
                     {% if conductores.grillas_viajes %}
@@ -596,7 +596,7 @@
                     <div class="hint-text">Cada celda muestra claramente el listado de choferes y pasajeros por dia y horario.</div>
                     {% else %}
                     <p style="text-align: center; color: #666; padding: 20px;">
-                        No se pudieron generar los resultados de asignación de conductores.
+                        No se pudieron generar los resultados de asignacion de conductores.
                     </p>
                     {% endif %}
                 </div>
@@ -693,7 +693,7 @@
         function descargarGrid(containerId, nombreArchivo) {
             const contenedor = document.getElementById(containerId);
             if (!contenedor) {
-                alert('No se encontró el bloque a descargar.');
+                alert('No se encontro el bloque a descargar.');
                 return;
             }
 

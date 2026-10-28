@@ -219,6 +219,55 @@
             accent-color: #4facfe;
         }
 
+        .coverage-section {
+            background: #f4f8ff;
+            border: 1px solid #dbe4ff;
+            padding: 20px 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .coverage-title {
+            font-size: 1.15em;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 6px;
+        }
+
+        .coverage-help {
+            font-size: 0.95em;
+            color: #556;
+            margin-bottom: 12px;
+        }
+
+        .coverage-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .coverage-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            border: 1px solid #dbe4ff;
+            border-radius: 999px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+
+        .coverage-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .coverage-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .submit-btn {
             width: 100%;
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
@@ -304,7 +353,7 @@
                                 <th>Hora</th>
                                 <th>Lunes</th>
                                 <th>Martes</th>
-                                <th>Miércoles</th>
+                                <th>Miercoles</th>
                                 <th>Jueves</th>
                             </tr>
                         </thead>
@@ -350,7 +399,7 @@
                                 <th>Hora</th>
                                 <th>Lunes</th>
                                 <th>Martes</th>
-                                <th>Miércoles</th>
+                                <th>Miercoles</th>
                                 <th>Jueves</th>
                             </tr>
                         </thead>
@@ -394,7 +443,7 @@
                     </table>
                 </div>
 
-                <!-- Sección de Flexibilidad y Conductor -->
+                <!-- Seccion de Flexibilidad y Conductor -->
                 <div class="checkbox-section">
                     <h3 style="text-align: center; margin-bottom: 20px; color: #667eea;">⚙️ Opciones de Flexibilidad y Conductor</h3>
                     
@@ -432,8 +481,8 @@
                         </div>
                     </div>
 
-                    <!-- Miércoles -->
-                    <div class="day-header">Miércoles</div>
+                    <!-- Miercoles -->
+                    <div class="day-header">Miercoles</div>
                     <div class="checkbox-row">
                         <div class="checkbox-group">
                             <input type="checkbox" id="miercoles_flex_ida" name="miercoles_flex_ida">
@@ -468,6 +517,27 @@
 
                 </div>
 
+                <!-- Cobertura: cubrir a otra persona -->
+                <div class="coverage-section">
+                    <div class="coverage-title">🤝 Cubrir a otra persona (opcional)</div>
+                    <p class="coverage-help">
+                        Si cubres a alguien, manejas 1 dia extra por cada persona cubierta y ella puede viajar sin manejar.
+                    </p>
+                    {% if opciones_cobertura %}
+                    <div class="coverage-list">
+                        {% for op in opciones_cobertura %}
+                        <label class="coverage-item">
+                            <input type="checkbox" name="cubre_a" value="{{ op.nombre }}"
+                                   data-bloqueado="{{ '1' if op.motivo else '' }}" data-cubridor="{{ op.cubridor or '' }}">
+                            {{ op.nombre }}{% if op.motivo %} ({{ op.motivo }}){% endif %}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="coverage-help">Aun no hay otras personas registradas para cubrir.</p>
+                    {% endif %}
+                </div>
+
                 <!-- Voluntario segundo viaje -->
                 <div class="volunteer-section">
                     <label for="voluntario_segundo_viaje">
@@ -475,11 +545,11 @@
                         <input type="checkbox" id="voluntario_segundo_viaje" name="voluntario_segundo_viaje">
                     </label>
                     <div id="voluntario-bloqueado-msg" style="display:none; margin-top:10px; font-size:0.95em; opacity:0.95;">
-                        Este usuario ya participa como compensador familiar y no puede habilitar viaje voluntario adicional.
+                        Quien cubre a otra persona ya maneja dias extra y no puede habilitar un viaje voluntario adicional.
                     </div>
                 </div>
 
-                <!-- Botón de envío -->
+                <!-- Boton de envio -->
                 <button type="submit" class="submit-btn">Enviar Preferencias</button>
             </form>
         </div>
@@ -507,7 +577,7 @@
                     
                     if (!idaRadio || !vueltaRadio) {
                         e.preventDefault();
-                        alert(`Error: Si estás dispuesto a manejar el ${dia.charAt(0).toUpperCase() + dia.slice(1)}, debes seleccionar una hora de ida y vuelta para ese día.`);
+                        alert(`Error: Si estas dispuesto a manejar el ${dia.charAt(0).toUpperCase() + dia.slice(1)}, debes seleccionar una hora de ida y vuelta para ese dia.`);
                         validationPassed = false;
                     }
                 }
@@ -522,36 +592,47 @@
         });
 
         // Ocultar mensajes de error cuando el usuario empiece a escribir
-        const nombresBloqueadosVoluntario = new Set(['Eduardo R', 'Pablo L']);
-
         function normalizarNombre(nombre) {
             return (nombre || '').trim().toLowerCase();
         }
 
-        function actualizarBloqueoVoluntario() {
-            const nombreInput = document.getElementById('nombre');
+        function actualizarCobertura() {
+            const nombreActual = normalizarNombre(document.getElementById('nombre').value);
             const voluntarioCheckbox = document.getElementById('voluntario_segundo_viaje');
             const msgBloqueo = document.getElementById('voluntario-bloqueado-msg');
-            const nombreActual = normalizarNombre(nombreInput.value);
 
-            const bloqueado = [...nombresBloqueadosVoluntario]
-                .some(nombre => normalizarNombre(nombre) === nombreActual);
+            document.querySelectorAll('input[name="cubre_a"]').forEach(checkbox => {
+                // Una persona ya cubierta por el usuario que se esta registrando sigue disponible.
+                const cubiertaPorMi = checkbox.dataset.cubridor && normalizarNombre(checkbox.dataset.cubridor) === nombreActual;
+                const bloqueado = checkbox.dataset.bloqueado === '1' && !cubiertaPorMi;
+                const esElMismo = normalizarNombre(checkbox.value) === nombreActual;
 
-            voluntarioCheckbox.disabled = bloqueado;
-            if (bloqueado) {
+                checkbox.disabled = bloqueado || esElMismo;
+                if (checkbox.disabled) {
+                    checkbox.checked = false;
+                }
+                checkbox.parentElement.classList.toggle('disabled', checkbox.disabled);
+            });
+
+            // Quien cubre a otros ya maneja dias extra: no puede ser voluntario de segundo viaje.
+            const cubreAlguien = document.querySelectorAll('input[name="cubre_a"]:checked').length > 0;
+            voluntarioCheckbox.disabled = cubreAlguien;
+            if (cubreAlguien) {
                 voluntarioCheckbox.checked = false;
-                msgBloqueo.style.display = 'block';
-            } else {
-                msgBloqueo.style.display = 'none';
             }
+            msgBloqueo.style.display = cubreAlguien ? 'block' : 'none';
         }
 
         document.getElementById('nombre').addEventListener('input', function() {
             document.getElementById('nombre-error').style.display = 'none';
-            actualizarBloqueoVoluntario();
+            actualizarCobertura();
         });
 
-        actualizarBloqueoVoluntario();
+        document.querySelectorAll('input[name="cubre_a"]').forEach(checkbox => {
+            checkbox.addEventListener('change', actualizarCobertura);
+        });
+
+        actualizarCobertura();
     </script>
 </body>
 </html>

@@ -258,16 +258,33 @@
                 <div class="opciones">
                     <div class="opcion">
                         <input type="checkbox" id="voluntario_segundo_viaje" name="voluntario_segundo_viaje"
-                               {% if usuario.Voluntario_Segundo_Viaje == 'Si' and not bloqueado_voluntario %}checked{% endif %}
-                               {% if bloqueado_voluntario %}disabled{% endif %}>
+                               {% if usuario.Voluntario_Segundo_Viaje == 'Si' and not cubre_actual %}checked{% endif %}
+                               {% if cubre_actual %}disabled{% endif %}>
                         <label for="voluntario_segundo_viaje">Disponible para 2 dias a la semana</label>
                     </div>
                 </div>
-                {% if bloqueado_voluntario %}
+                <p id="voluntario-bloqueado-msg" style="margin-top: 8px; color: #8a3b1f; font-size: 0.95em; {% if not cubre_actual %}display: none;{% endif %}">
+                    Quien cubre a otra persona ya maneja dias extra y no puede ser voluntario de segundo viaje.
+                </p>
+
+                <div class="section-title">Cubrir a otras personas</div>
+                {% if cubierto_por %}
                 <p style="margin-top: 8px; color: #8a3b1f; font-size: 0.95em;">
-                    Este usuario tiene bloqueo de voluntario por regla de compensacion.
+                    Este usuario esta cubierto por {{ cubierto_por }}, por lo que no puede cubrir a otras personas.
                 </p>
                 {% endif %}
+                <div class="opciones">
+                    {% for op in opciones_cobertura %}
+                    <div class="opcion">
+                        <input type="checkbox" id="cubre_{{ loop.index }}" name="cubre_a" value="{{ op.nombre }}"
+                               {% if op.nombre in cubre_actual %}checked{% endif %}
+                               {% if op.motivo or cubierto_por %}disabled{% endif %}>
+                        <label for="cubre_{{ loop.index }}">{{ op.nombre }}{% if op.motivo %} ({{ op.motivo }}){% endif %}</label>
+                    </div>
+                    {% else %}
+                    <p>No hay otras personas registradas.</p>
+                    {% endfor %}
+                </div>
 
                 <div class="acciones">
                     <button type="submit" class="btn">Guardar Cambios</button>
@@ -276,5 +293,26 @@
             </form>
         </div>
     </div>
+
+    <script>
+        const voluntarioCheckbox = document.getElementById('voluntario_segundo_viaje');
+        const msgBloqueo = document.getElementById('voluntario-bloqueado-msg');
+
+        // Quien cubre a otros ya maneja dias extra: no puede ser voluntario de segundo viaje.
+        function actualizarCobertura() {
+            const cubreAlguien = document.querySelectorAll('input[name="cubre_a"]:checked').length > 0;
+            voluntarioCheckbox.disabled = cubreAlguien;
+            if (cubreAlguien) {
+                voluntarioCheckbox.checked = false;
+            }
+            msgBloqueo.style.display = cubreAlguien ? 'block' : 'none';
+        }
+
+        document.querySelectorAll('input[name="cubre_a"]').forEach(checkbox => {
+            checkbox.addEventListener('change', actualizarCobertura);
+        });
+
+        actualizarCobertura();
+    </script>
 </body>
 </html>

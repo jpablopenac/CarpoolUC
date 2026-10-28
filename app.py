@@ -2,20 +2,22 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 import csv
 import os
 from datetime import datetime
-from optimizador import ejecutar_optimizacion, CAPACIDAD_VEHICULO, HORARIOS_IDA, HORARIOS_VUELTA
+from optimizador import (
+    ejecutar_optimizacion, parsear_cobertura,
+    CAPACIDAD_VEHICULO, HORARIOS_IDA, HORARIOS_VUELTA, COLUMNA_COBERTURA, SEPARADOR_COBERTURA
+)
 
 app = Flask(__name__)
 
-# Configuración
+# Configuracion
 DATA_FILE = 'datos_usuarios.csv'
-COMPENSADORES_BLOQUEADOS_VOLUNTARIO = {'Eduardo R', 'Pablo L'}
 HEADERS = [
     'Nombre', 'Timestamp',
     'Lunes_Ida', 'Lunes_Vuelta', 'Lunes_Conductor', 'Lunes_Flex_Ida', 'Lunes_Flex_Vuelta',
     'Martes_Ida', 'Martes_Vuelta', 'Martes_Conductor', 'Martes_Flex_Ida', 'Martes_Flex_Vuelta',
     'Miercoles_Ida', 'Miercoles_Vuelta', 'Miercoles_Conductor', 'Miercoles_Flex_Ida', 'Miercoles_Flex_Vuelta',
     'Jueves_Ida', 'Jueves_Vuelta', 'Jueves_Conductor', 'Jueves_Flex_Ida', 'Jueves_Flex_Vuelta',
-    'Voluntario_Segundo_Viaje'
+    'Voluntario_Segundo_Viaje', COLUMNA_COBERTURA
 ]
 DIAS_FORM = ['lunes', 'martes', 'miercoles', 'jueves']
 DIAS_TITULO = ['Lunes', 'Martes', 'Miercoles', 'Jueves']
@@ -41,11 +43,68 @@ def guardar_datos_csv(datos):
         writer.writerows(datos)
 
 
-def construir_fila_desde_form(formulario):
+def coberturas_vigentes(datos, ignorar_nombre=None):
+    """
+    Devuelve {cubierto: quien_cubre} segun el registro mas reciente de cada usuario.
+    ignorar_nombre excluye las coberturas declaradas por ese usuario (para validar su propio registro).
+    """
+    ultimos = {fila['Nombre']: fila for fila in datos if fila.get('Nombre')}
+    coberturas = {}
+    for nombre, fila in ultimos.items():
+        if nombre == ignorar_nombre:
+            continue
+        for cubierto in parsear_cobertura(fila.get(COLUMNA_COBERTURA)):
+            coberturas.setdefault(cubierto, nombre)
+    return coberturas
+
+
+def opciones_cobertura(datos, nombre_propio=None):
+    """
+    Lista de personas registradas que se pueden elegir como cubiertas.
+    Cada opcion trae 'motivo' con la razon por la que no esta disponible (o None) y 'cubridor' si ya lo cubre alguien.
+    """
+    coberturas = coberturas_vigentes(datos, ignorar_nombre=nombre_propio)
+    cubridores = set(coberturas.values())
+    nombres = sorted({fila['Nombre'] for fila in datos if fila.get('Nombre')}, key=str.lower)
+
+    opciones = []
+    for nombre in nombres:
+        if nombre == nombre_propio:
+            continue
+        motivo = None
+        if nombre in coberturas:
+            motivo = f"ya lo cubre {coberturas[nombre]}"
+        elif nombre in cubridores:
+            motivo = "ya cubre a otra persona"
+        opciones.append({'nombre': nombre, 'motivo': motivo, 'cubridor': coberturas.get(nombre)})
+    return opciones
+
+
+def validar_cobertura(nombre, cubre, datos):
+    """Retorna un mensaje de error si la cobertura declarada no es valida, o None si lo es"""
+    if not cubre:
+        return None
+
+    coberturas = coberturas_vigentes(datos, ignorar_nombre=nombre)
+    if nombre in coberturas:
+        return f"Error: {nombre} ya esta cubierto por {coberturas[nombre]} y no puede cubrir a otras personas"
+
+    cubridores = set(coberturas.values())
+    for cubierto in cubre:
+        if cubierto in coberturas:
+            return f"Error: {cubierto} ya esta cubierto por {coberturas[cubierto]}"
+        if cubierto in cubridores:
+            return f"Error: {cubierto} ya cubre a otra persona y no puede ser cubierto"
+    return None
+
+
+def construir_fila_desde_form(formulario, datos_existentes=()):
     """Construye y valida una fila del CSV desde los datos del formulario"""
     nombre = formulario.get('nombre', '').strip()
     if not nombre:
         return None, "Error: El nombre es requerido"
+    if SEPARADOR_COBERTURA in nombre:
+        return None, f"Error: El nombre no puede contener '{SEPARADOR_COBERTURA}'"
 
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     fila_datos = [nombre, timestamp]
@@ -59,10 +118,15 @@ def construir_fila_desde_form(formulario):
 
         fila_datos.extend([ida, vuelta, conductor, flex_ida, flex_vuelta])
 
-    voluntario = 'Si' if formulario.get('voluntario_segundo_viaje') else 'No'
-    if nombre in COMPENSADORES_BLOQUEADOS_VOLUNTARIO:
-        voluntario = 'No'
+    # Quien cubre a otros ya maneja dias extra, por lo que no puede ser voluntario de segundo viaje.
+    cubre = [n for n in parsear_cobertura(SEPARADOR_COBERTURA.join(formulario.getlist('cubre_a'))) if n != nombre]
+    error_cobertura = validar_cobertura(nombre, cubre, datos_existentes)
+    if error_cobertura:
+        return None, error_cobertura
+
+    voluntario = 'Si' if formulario.get('voluntario_segundo_viaje') and not cubre else 'No'
     fila_datos.append(voluntario)
+    fila_datos.append(SEPARADOR_COBERTURA.join(cubre))
 
     for i, dia in enumerate(DIAS_FORM):
         if fila_datos[2 + i * 5 + 2] == 'Si':
@@ -70,8 +134,8 @@ def construir_fila_desde_form(formulario):
             vuelta_val = fila_datos[2 + i * 5 + 1]
             if not ida_val or not vuelta_val:
                 return None, (
-                    f"Error: Si estás dispuesto a manejar el {dia.capitalize()}, "
-                    "debes seleccionar una hora de ida y vuelta para ese día"
+                    f"Error: Si estas dispuesto a manejar el {dia.capitalize()}, "
+                    "debes seleccionar una hora de ida y vuelta para ese dia"
                 )
 
     return fila_datos, None
@@ -82,22 +146,28 @@ def fila_a_dict(fila_datos):
     return {header: fila_datos[idx] for idx, header in enumerate(HEADERS)}
 
 def inicializar_csv():
-    """Crear archivo CSV si no existe"""
+    """Crear archivo CSV si no existe, o actualizar su encabezado si le faltan columnas nuevas"""
     if not os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(HEADERS)
+        return
+
+    with open(DATA_FILE, 'r', newline='', encoding='utf-8-sig') as file:
+        columnas = next(csv.reader(file), [])
+    if columnas != HEADERS:
+        guardar_datos_csv(leer_datos_csv())
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', opciones_cobertura=opciones_cobertura(leer_datos_csv()))
 
 @app.route('/submit', methods=['POST'])
 def submit_data():
     try:
         inicializar_csv()
 
-        fila_datos, error = construir_fila_desde_form(request.form)
+        fila_datos, error = construir_fila_desde_form(request.form, leer_datos_csv())
         if error:
             return error, 400
 
@@ -127,14 +197,14 @@ def success():
     <body>
         <div class="success">✓ Datos enviados exitosamente</div>
         <div class="link"><a href="/">Volver al formulario</a></div>
-        <div class="link"><a href="/admin">Ver panel de administración</a></div>
+        <div class="link"><a href="/admin">Ver panel de administracion</a></div>
     </body>
     </html>
     """
 
 @app.route('/admin')
 def admin_panel():
-    """Panel de administración para ver datos y ejecutar optimización"""
+    """Panel de administracion para ver datos y ejecutar optimizacion"""
     try:
         datos = leer_datos_csv()
         return render_template('admin.html', datos=datos, total_usuarios=len(datos))
@@ -153,7 +223,9 @@ def admin_editar_usuario(indice):
             return "Registro no encontrado", 404
 
         if request.method == 'POST':
-            fila_datos, error = construir_fila_desde_form(request.form)
+            # El registro editado se excluye para que no choque con su propia cobertura anterior.
+            otros_datos = datos[:indice] + datos[indice + 1:]
+            fila_datos, error = construir_fila_desde_form(request.form, otros_datos)
             if error:
                 return error, 400
 
@@ -162,6 +234,8 @@ def admin_editar_usuario(indice):
             return redirect(url_for('admin_panel'))
 
         usuario = datos[indice]
+        nombre_usuario = usuario.get('Nombre', '')
+        otros_datos = datos[:indice] + datos[indice + 1:]
         return render_template(
             'admin_editar.html',
             usuario=usuario,
@@ -175,7 +249,9 @@ def admin_editar_usuario(indice):
             dias_titulo=DIAS_TITULO,
             horarios_ida=HORARIOS_IDA,
             horarios_vuelta=HORARIOS_VUELTA,
-            bloqueado_voluntario=usuario.get('Nombre', '') in COMPENSADORES_BLOQUEADOS_VOLUNTARIO
+            opciones_cobertura=opciones_cobertura(otros_datos, nombre_usuario),
+            cubre_actual=parsear_cobertura(usuario.get(COLUMNA_COBERTURA)),
+            cubierto_por=coberturas_vigentes(otros_datos).get(nombre_usuario)
         )
     except Exception as e:
         return f"Error al editar registro: {str(e)}", 500
@@ -183,7 +259,7 @@ def admin_editar_usuario(indice):
 
 @app.route('/admin/eliminar/<int:indice>', methods=['POST'])
 def admin_eliminar_usuario(indice):
-    """Elimina un registro de usuario por índice desde admin"""
+    """Elimina un registro de usuario por indice desde admin"""
     try:
         inicializar_csv()
         datos = leer_datos_csv()
@@ -211,12 +287,12 @@ def download_csv():
 
 
 # =============================================================================
-# RUTAS DE OPTIMIZACIÓN
+# RUTAS DE OPTIMIZACION
 # =============================================================================
 
 @app.route('/optimizar')
 def optimizar():
-    """Ejecuta la optimización y muestra los resultados"""
+    """Ejecuta la optimizacion y muestra los resultados"""
     try:
         # Verificar que existen datos
         if not os.path.exists(DATA_FILE):
@@ -227,7 +303,7 @@ def optimizar():
         # Obtener capacidad personalizada si se proporciona
         capacidad = request.args.get('capacidad', CAPACIDAD_VEHICULO, type=int)
         
-        # Ejecutar optimización
+        # Ejecutar optimizacion
         resultado = ejecutar_optimizacion(DATA_FILE, capacidad)
         
         if not resultado.get('exito'):
@@ -244,13 +320,13 @@ def optimizar():
     
     except Exception as e:
         return render_template('resultados.html', 
-                               error=f"Error al ejecutar optimización: {str(e)}",
+                               error=f"Error al ejecutar optimizacion: {str(e)}",
                                exito=False)
 
 
 @app.route('/api/optimizar')
 def api_optimizar():
-    """API JSON para obtener resultados de optimización"""
+    """API JSON para obtener resultados de optimizacion"""
     try:
         if not os.path.exists(DATA_FILE):
             return jsonify({'exito': False, 'error': 'No hay datos para optimizar'}), 404
@@ -266,7 +342,7 @@ def api_optimizar():
 
 @app.route('/api/estadisticas')
 def api_estadisticas():
-    """API para obtener estadísticas rápidas sin optimización completa"""
+    """API para obtener estadisticas rapidas sin optimizacion completa"""
     try:
         if not os.path.exists(DATA_FILE):
             return jsonify({'exito': False, 'error': 'No hay datos'}), 404
@@ -277,7 +353,7 @@ def api_estadisticas():
         if datos.empty:
             return jsonify({'exito': False, 'error': 'No hay registros'}), 404
         
-        # Estadísticas básicas
+        # Estadisticas basicas
         total_usuarios = len(datos)
         conductores_totales = sum(
             (datos[f'{dia}_Conductor'] == 'Si').sum()

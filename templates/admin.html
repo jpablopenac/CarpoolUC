@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración - Optimizador</title>
+    <title>Panel de Administracion - Optimizador</title>
     <style>
         * {
             margin: 0;
@@ -206,8 +206,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 Panel de Administración</h1>
-            <p>Recopilación de datos de turnos universitarios</p>
+            <h1>📊 Panel de Administracion</h1>
+            <p>Recopilacion de datos de turnos universitarios</p>
         </div>
 
         <div class="stats">
@@ -230,7 +230,7 @@
         </div>
 
         <div class="actions">
-            <a href="/optimizar" class="action-btn">🎯 Ejecutar Optimización</a>
+            <a href="/optimizar" class="action-btn">🎯 Ejecutar Optimizacion</a>
             <a href="/download-csv" class="action-btn">📥 Descargar CSV</a>
             <a href="/" class="action-btn secondary">🔙 Volver al Formulario</a>
         </div>
@@ -248,9 +248,10 @@
                             <th>Fecha Registro</th>
                             <th>Lunes</th>
                             <th>Martes</th>
-                            <th>Miércoles</th>
+                            <th>Miercoles</th>
                             <th>Jueves</th>
                             <th>Voluntario</th>
+                            <th>Cubre a</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -293,14 +294,15 @@
                             </td>
                             <td>
                                 {% if usuario.Voluntario_Segundo_Viaje == 'Si' %}
-                                    ✅ Sí
+                                    ✅ Si
                                 {% else %}
                                     ❌ No
                                 {% endif %}
                             </td>
+                            <td>{{ usuario.Cubre_A.replace(';', ', ') if usuario.Cubre_A else '-' }}</td>
                             <td>
                                 <a href="/admin/editar/{{ loop.index0 }}" class="action-btn" style="padding: 8px 14px; margin: 0; font-size: 0.78em; letter-spacing: 0.3px;">✏️ Editar</a>
-                                <form action="/admin/eliminar/{{ loop.index0 }}" method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.');">
+                                <form action="/admin/eliminar/{{ loop.index0 }}" method="POST" style="display: inline;" onsubmit="return confirm('¿Eliminar este usuario? Esta accion no se puede deshacer.');">
                                     <button type="submit" class="action-btn danger" style="padding: 8px 14px; margin: 6px 0 0 0; font-size: 0.78em; letter-spacing: 0.3px; border: none; cursor: pointer;">🗑️ Eliminar</button>
                                 </form>
                             </td>
@@ -316,7 +318,7 @@
                 📋 Datos de Usuarios
             </div>
             <div class="no-data">
-                No hay datos de usuarios registrados aún.
+                No hay datos de usuarios registrados aun.
                 <br><br>
                 <a href="/" class="action-btn">➕ Agregar Primer Usuario</a>
             </div>
@@ -325,7 +327,7 @@
     </div>
 
     <script>
-        // Calcular estadísticas adicionales
+        // Calcular estadisticas adicionales
         document.addEventListener('DOMContentLoaded', function() {
             {% if datos %}
             let totalViajes = 0;
@@ -342,7 +344,7 @@
                     if (usuario[dia + '_Vuelta']) totalViajes++;
                 });
                 
-                // Contar conductores disponibles (al menos un día)
+                // Contar conductores disponibles (al menos un dia)
                 let esConductor = false;
                 dias.forEach(dia => {
                     if (usuario[dia + '_Conductor'] === 'Si') {
